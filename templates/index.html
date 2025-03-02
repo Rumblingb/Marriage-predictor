@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Marriage Prediction Game</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            flex-direction: column;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            width: 80%;
+            max-width: 600px;
+            text-align: center;
+        }
+        h1 {
+            color: #4CAF50;
+        }
+        form {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin: 10px 0 5px;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #result {
+            margin-top: 20px;
+        }
+        #lifePathChart {
+            margin-top: 20px;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Marriage Prediction Game</h1>
+        <form id="predictionForm">
+            <label for="name">Name:</label>
+            <input type="text" id="name" name="name" required>
+            <label for="dob">Date of Birth:</label>
+            <input type="date" id="dob" name="dob" required>
+            <label for="place">Place:</label>
+            <input type="text" id="place" name="place" required>
+            <button type="submit">Predict</button>
+        </form>
+        <div id="result" class="hidden">
+            <h2>Prediction Result</h2>
+            <p id="marriageAge"></p>
+            <canvas id="lifePathChart"></canvas>
+        </div>
+    </div>
+    <script>
+        let lifePathChart;
+
+        document.getElementById('predictionForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = {
+                name: document.getElementById('name').value,
+                dob: formatDate(document.getElementById('dob').value), // Format date to DD-MM-YYYY
+                place: document.getElementById('place').value
+            };
+
+            // Validate date
+            if (!formData.dob) {
+                document.getElementById('result').innerHTML = `<p style="color: red;">Error: Please enter a valid date.</p>`;
+                return;
+            }
+
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Network response was not ok');
+                }
+                const data = await response.json();
+
+                // Display marriage age(s)
+                if (data.marriage_age_2) {
+                    document.getElementById('marriageAge').innerText = `You're going to be married twice at these ages: ${data.marriage_age_1} and ${data.marriage_age_2}.`;
+                } else {
+                    document.getElementById('marriageAge').innerText = `You may get married around age ${data.marriage_age_1}.`;
+                }
+
+                // Show the result section
+                document.getElementById('result').classList.remove('hidden');
+
+                // Destroy existing chart if it exists
+                if (lifePathChart) {
+                    lifePathChart.destroy();
+                }
+
+                // Extract ages and life path values
+                const ages = data.life_path_data.map(item => item[0]);
+                const lifePathValues = data.life_path_data.map(item => item[1]);
+
+                // Prepare annotations for events
+                const annotations = [];
+                for (const [index, event] of Object.entries(data.events)) {
+                    annotations.push({
+                        type: 'line',
+                        mode: 'vertical',
+                        scaleID: 'x',
+                        value: ages[index],
+                        borderColor: 'red',
+                        borderWidth: 2,
+                        label: {
+                            content: event,
+                            enabled: true,
+                            position: 'top'
+                        }
+                    });
+                }
+
+                // Render the life path graph
+                const ctx = document.getElementById('lifePathChart').getContext('2d');
+                lifePathChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: ages, // X-axis labels (ages)
+                        datasets: [{
+                            label: 'Life Path',
+                            data: lifePathValues, // Y-axis data (life path values)
+                            borderColor: '#4CAF50',
+                            fill: false
+                        }]
+                    },
+                    options: {
+                        scales: {
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'Age'
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Life Path Value'
+                                }
+                            }
+                        },
+                        plugins: {
+                            annotation: {
+                                annotations: annotations
+                            }
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('result').innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            }
+        });
+
+        // Helper function to format date from YYYY-MM-DD to DD-MM-YYYY
+        function formatDate(dateString) {
+            if (!dateString) return null;
+            const [year, month, day] = dateString.split('-');
+            return `${day}-${month}-${year}`;
+        }
+    </script>
+</body>
+</html>
