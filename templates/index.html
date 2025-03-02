@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Marriage Prediction Game</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -133,24 +132,6 @@
                 const ages = data.life_path_data.map(item => item[0]);
                 const lifePathValues = data.life_path_data.map(item => item[1]);
 
-                // Prepare annotations for events
-                const annotations = [];
-                for (const [index, event] of Object.entries(data.events)) {
-                    annotations.push({
-                        type: 'line',
-                        mode: 'vertical',
-                        scaleID: 'x',
-                        value: ages[index],
-                        borderColor: 'red',
-                        borderWidth: 2,
-                        label: {
-                            content: event,
-                            enabled: true,
-                            position: 'top'
-                        }
-                    });
-                }
-
                 // Render the life path graph
                 const ctx = document.getElementById('lifePathChart').getContext('2d');
                 lifePathChart = new Chart(ctx, {
@@ -177,11 +158,6 @@
                                     display: true,
                                     text: 'Life Path Value'
                                 }
-                            }
-                        },
-                        plugins: {
-                            annotation: {
-                                annotations: annotations
                             }
                         }
                     }
