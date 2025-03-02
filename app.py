@@ -3,7 +3,16 @@ import random
 from datetime import datetime
 import sqlite3
 
+
+
 app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Hello, World!"
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
 
 # Database setup
 DATABASE = 'marriage_predictions.db'
