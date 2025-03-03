@@ -20,8 +20,11 @@ country_to_code = {}
 def preprocess_world_marriage_data(file_path):
     global country_to_code
     try:
+        app.logger.debug(f"Attempting to load dataset from: {file_path}")
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Dataset file not found at {file_path}")
         df = pd.read_csv(file_path).sample(n=10000, random_state=42)
-        app.logger.debug(f"CSV column names: {df.columns.tolist()}")
+        app.logger.debug(f"Dataset loaded. Columns: {df.columns.tolist()}, Shape: {df.shape}")
 
         country_col = 'Country'
         age_group_col = 'AgeGroup'
@@ -34,40 +37,60 @@ def preprocess_world_marriage_data(file_path):
         missing_cols = [col for col in required_cols if col not in df.columns]
         if missing_cols:
             raise KeyError(f"Missing columns in dataset: {missing_cols}")
+        app.logger.debug("Required columns verified")
 
         df = df.dropna(subset=required_cols)
+        app.logger.debug(f"After dropna: Shape: {df.shape}")
 
         def parse_age(age_str):
-            age_str = age_str.strip('[]')
-            if '-' in age_str:
-                start, end = age_str.split('-')
-                return (int(start) + int(end)) / 2
-            elif '+' in age_str:
-                return int(age_str.strip('+'))
-            else:
-                return float(age_str)
+            try:
+                age_str = age_str.strip('[]')
+                if '-' in age_str:
+                    start, end = age_str.split('-')
+                    return (int(start) + int(end)) / 2
+                elif '+' in age_str:
+                    return int(age_str.strip('+'))
+                else:
+                    return float(age_str)
+            except Exception as e:
+                app.logger.error(f"Error parsing age '{age_str}': {e}")
+                return 30.0  # Default age if parsing fails
 
         df['Age'] = df[age_group_col].apply(parse_age)
-        df['Sex_Encoded'] = df[sex_col].map({'Man': 0, 'Woman': 1})
+        app.logger.debug("Age column created")
+
+        df['Sex_Encoded'] = df[sex_col].map({'Man': 0, 'Woman': 1}).fillna(0)  # Default to 0 if unmapped
+        app.logger.debug("Sex_Encoded column created")
+
         df['Country_Encoded'] = df[country_col].astype('category').cat.codes
+        app.logger.debug("Country_Encoded column created")
+
         df['Year'] = (df[year_start_col] + df[year_end_col]) / 2
+        app.logger.debug("Year column created")
+
         df['Marital_Status_Encoded'] = df[marital_status_col].map({
             'Single': 0, 'Never married': 0, 'Not in union': 0,
             'Married': 1, 'Living together': 1,
             'Divorced': 2, 'Separated': 2, 'Divorced or Separated': 2,
             'Widowed': 3
         }).fillna(0)
+        app.logger.debug("Marital_Status_Encoded column created")
 
         df['Personality_Encoded'] = np.random.choice([0, 1], size=len(df))
         df['Money_Factor'] = np.random.uniform(0, 200000, size=len(df))
         df['Height'] = np.random.uniform(36, 96, size=len(df))
         df['Healthiness'] = np.random.uniform(15, 40, size=len(df))
+        app.logger.debug("Additional feature columns created")
 
         country_to_code = dict(zip(df[country_col], df['Country_Encoded']))
         X = df[['Age', 'Sex_Encoded', 'Country_Encoded', 'Year', 'Personality_Encoded', 'Money_Factor', 'Height', 'Healthiness']]
         y = df['Marital_Status_Encoded']
-        app.logger.debug(f"Training features: {X.columns.tolist()}, shape: {X.shape}")
+        app.logger.debug(f"Training features: {X.columns.tolist()}, Shape: {X.shape}")
+        app.logger.debug(f"Target variable shape: {y.shape}")
         return X, y
+    except Exception as e:
+        app.logger.error(f"Error in preprocess_world_marriage_data: {e}")
+        raise
 
 # Train ML model
 def train_ml_model(file_path):
@@ -83,7 +106,7 @@ def train_ml_model(file_path):
 
 # Load or train ML model on startup
 DATASET_PATH = 'World Marriage Dataset.csv'
-ml_model = train_ml_model(DATASET_PATH)  # Train on startup, no pickle
+ml_model = train_ml_model(DATASET_PATH)
 
 # Enhanced Brownian motion with updated factors
 def brownian_motion(steps=50, drift=0.3, volatility=0.4, initial_position=0, money_factor=0, height=50, healthiness=25):
