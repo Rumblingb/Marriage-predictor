@@ -11,6 +11,9 @@ import os
 app = Flask(__name__)
 logging.basicConfig(level=logging.DEBUG)
 
+# In-memory list to store names (temporary, resets on restart)
+names_list = []
+
 # Global variable for country mapping
 country_to_code = {}
 
@@ -18,10 +21,9 @@ country_to_code = {}
 def preprocess_world_marriage_data(file_path):
     global country_to_code
     try:
-        df = pd.read_csv(file_path).sample(n=10000, random_state=42)  # Reduce dataset size
+        df = pd.read_csv(file_path).sample(n=10000, random_state=42)
         app.logger.debug(f"CSV column names: {df.columns.tolist()}")
 
-        # Use exact column names from your CSV
         country_col = 'Country'
         age_group_col = 'AgeGroup'
         sex_col = 'Sex'
@@ -29,7 +31,6 @@ def preprocess_world_marriage_data(file_path):
         year_start_col = 'Data Collection (Start Year)'
         year_end_col = 'Data Collection (End Year)'
 
-        # Check for missing columns
         required_cols = [country_col, age_group_col, sex_col, marital_status_col]
         missing_cols = [col for col in required_cols if col not in df.columns]
         if missing_cols:
@@ -37,7 +38,6 @@ def preprocess_world_marriage_data(file_path):
 
         df = df.dropna(subset=required_cols)
 
-        # Parse AgeGroup
         def parse_age(age_str):
             age_str = age_str.strip('[]')
             if '-' in age_str:
@@ -59,11 +59,10 @@ def preprocess_world_marriage_data(file_path):
             'Widowed': 3
         }).fillna(0)
 
-        # Add features with realistic ranges
-        df['Personality_Encoded'] = np.random.choice([0, 1], size=len(df))  # 0=introvert, 1=extrovert
-        df['Money_Factor'] = np.random.uniform(0, 200000, size=len(df))  # 0 to 200,000 USD per year
-        df['Height'] = np.random.uniform(36, 96, size=len(df))  # 3 to 8 ft in inches
-        df['Healthiness'] = np.random.uniform(15, 40, size=len(df))  # BMI 15 to 40
+        df['Personality_Encoded'] = np.random.choice([0, 1], size=len(df))
+        df['Money_Factor'] = np.random.uniform(0, 200000, size=len(df))
+        df['Height'] = np.random.uniform(36, 96, size=len(df))
+        df['Healthiness'] = np.random.uniform(15, 40, size=len(df))
 
         country_to_code = dict(zip(df[country_col], df['Country_Encoded']))
         X = df[['Age', 'Sex_Encoded', 'Country_Encoded', 'Year', 'Personality_Encoded', 'Money_Factor', 'Height', 'Healthiness']]
@@ -80,13 +79,7 @@ def preprocess_world_marriage_data(file_path):
 def train_ml_model(file_path):
     try:
         X, y = preprocess_world_marriage_data(file_path)
-        model = RandomForestClassifier(
-            n_estimators=50,
-            max_depth=10,
-            min_samples_split=5,
-            class_weight='balanced',  # Balance class weights
-            random_state=42
-        )
+        model = RandomForestClassifier(n_estimators=50, max_depth=10, min_samples_split=5, class_weight='balanced', random_state=42)
         model.fit(X, y)
         with open('marriage_model.pkl', 'wb') as f:
             pickle.dump(model, f)
@@ -96,9 +89,13 @@ def train_ml_model(file_path):
         app.logger.error(f"Error training model: {e}")
         raise
 
-# Load or train ML model (force retraining)
-DATASET_PATH = 'C:/Users/visha/PycharmProjects/FlaskProject1/World Marriage Dataset.csv'
-ml_model = train_ml_model(DATASET_PATH)
+# Load or train ML model
+DATASET_PATH = 'World Marriage Dataset.csv'  # Relative path for deployment
+if not os.path.exists('marriage_model.pkl'):
+    ml_model = train_ml_model(DATASET_PATH)
+else:
+    with open('marriage_model.pkl', 'rb') as f:
+        ml_model = pickle.load(f)
 
 # Enhanced Brownian motion with updated factors
 def brownian_motion(steps=50, drift=0.3, volatility=0.4, initial_position=0, money_factor=0, height=50, healthiness=25):
@@ -111,9 +108,9 @@ def brownian_motion(steps=50, drift=0.3, volatility=0.4, initial_position=0, mon
     divorce_events = []
 
     dW = np.random.normal(0, np.sqrt(dt), steps)
-    money_impact = money_factor / 200000  # Normalize 0 to 200,000
-    height_impact = (height - 36) / 60  # Normalize 36 to 96 inches
-    healthiness_impact = (healthiness - 15) / 25  # Normalize 15 to 40 BMI
+    money_impact = money_factor / 200000
+    height_impact = (height - 36) / 60
+    healthiness_impact = (healthiness - 15) / 25
 
     for i in range(steps):
         stability_factor = (relationship_stability[-1] / 100.0) + (money_impact * 0.2) + (healthiness_impact * 0.2)
@@ -205,17 +202,17 @@ def predict_marriage_ml(dob, gender, status, personality, place, money_factor=0,
     app.logger.debug(f"Prediction features: {features}")
     probs = ml_model.predict_proba([features])[0]
     app.logger.debug(f"Prediction probabilities: Single={probs[0]:.2f}, Married={probs[1]:.2f}, Divorced={probs[2]:.2f}, Widowed={probs[3]:.2f}")
-    prediction = np.argmax(probs)  # Use highest probability class
+    prediction = np.argmax(probs)
     future_probs = []
     for future_age in range(age_now, age_now + 10):
         future_features = [future_age, gender_map.get(gender, 0), country_code, 2019, personality_map[personality], money_factor, height, healthiness]
         future_probs.append(ml_model.predict_proba([future_features])[0].tolist())
 
-    threshold = 0.25  # Lowered threshold to increase marriage/divorce likelihood
-    if probs[1] > threshold:  # Married
+    threshold = 0.25
+    if probs[1] > threshold:
         marriage_age = age_now + random.randint(2, 10)
         message = f"ML Model: Marriage predicted at age {marriage_age} (Probability: {probs[1]:.2f})."
-    elif probs[2] > threshold:  # Divorced
+    elif probs[2] > threshold:
         marriage_age = age_now - random.randint(2, 10) if age_now > 20 else None
         message = f"ML Model: Marriage and divorce predicted (Probability of divorce: {probs[2]:.2f})."
     else:
@@ -226,7 +223,7 @@ def predict_marriage_ml(dob, gender, status, personality, place, money_factor=0,
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html', names=names_list)
 
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -250,6 +247,11 @@ def predict():
     if personality not in ["introvert", "extrovert"]:
         app.logger.error(f"Invalid personality value: {personality}")
         return jsonify({'error': 'Invalid personality. Choose "introvert" or "extrovert".'}), 400
+
+    # Add name to in-memory list
+    names_list.append(name)
+    if len(names_list) > 100:  # Optional: limit list size
+        names_list.pop(0)
 
     try:
         stoch_age_1, stoch_age_2, life_path_data, events, no_marriage_predicted, divorce_ages, stoch_message = predict_marriage_stochastic(
@@ -285,4 +287,5 @@ def predict():
 
 if __name__ == '__main__':
     preprocess_world_marriage_data(DATASET_PATH)
-    app.run(host='0.0.0.0', port=5000)
+    port = int(os.environ.get('PORT', 5000))  # Use PORT env var for Render
+    app.run(host='0.0.0.0', port=port)
