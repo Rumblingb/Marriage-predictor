@@ -67,7 +67,7 @@ def brownian_motion(steps=50, drift=0.3, volatility=0.4, initial_position=0):
 
     for i in range(steps):
         stability_factor = relationship_stability[-1] / 100.0
-        position += drift * stability_factor * dt + volatility * dW[i] * (1 + stability_factor)  # Increased drift/volatility
+        position += drift * stability_factor * dt + volatility * dW[i] * (1 + stability_factor)
         path.append(position)
 
         happiness.append(max(30, min(100, happiness[-1] + int(5 * dW[i] * stability_factor))))
@@ -96,14 +96,14 @@ def predict_marriage_stochastic(name, dob, place, gender, status, personality):
     age_now = datetime.now().year - birth_year
     life_expectancy = 80
     steps = life_expectancy - age_now
-    drift = 0.3 if personality == "introvert" else 0.35  # Increased drift for introverts
+    drift = 0.3 if personality == "introvert" else 0.35
     volatility = 0.4 if personality == "introvert" else 0.45
     initial_position = 2.5 if status.lower() in ["in a relationship", "dating"] else 0 if status.lower() == "single" else 4.5
-    initial_position += -0.5 if personality == "introvert" else 0.5  # Reduced adjustment magnitude
+    initial_position += -0.5 if personality == "introvert" else 0.5
 
     path, happiness, relationship_stability, events, divorce_events = brownian_motion(steps, drift, volatility, initial_position)
 
-    marriage_threshold = 2.5  # Lowered threshold for easier marriage
+    marriage_threshold = 2.5
     marriage_age_1 = None
     marriage_age_2 = None
     ages = list(range(age_now, age_now + len(path)))
@@ -118,8 +118,8 @@ def predict_marriage_stochastic(name, dob, place, gender, status, personality):
             marriage_age_2 = ages[i]
             break
 
-    divorce_ages = [ages[i] for i in divorce_events]
-    no_marriage_predicted = marriage_age_1 is None and initial_position < marriage_threshold
+    divorce_ages = [int(age) for age in [ages[i] for i in divorce_events]]  # Convert to Python int
+    no_marriage_predicted = marriage_age_1 is None and initial_position < 5.0
 
     if marriage_age_2:
         message = f"Stochastic Model: You're going to be married at ages {marriage_age_1} and {marriage_age_2}!"
@@ -148,11 +148,11 @@ def predict_marriage_ml(dob, gender, status, personality, place):
     country_code = country_to_code.get(place, 0)
 
     features = [age_now, gender_map.get(gender, 0), country_code, 2019]
-    prediction = ml_model.predict([features])[0]
+    prediction = float(ml_model.predict([features])[0])  # Convert np.float64 to float
     future_predictions = []
     for future_age in range(age_now, age_now + 10):
         future_features = [future_age, gender_map.get(gender, 0), country_code, 2019]
-        pred = ml_model.predict([future_features])[0]
+        pred = float(ml_model.predict([future_features])[0])  # Convert np.float64 to float
         future_predictions.append(pred)
         app.logger.debug(f"Future prediction at age {future_age}: {pred}")
 
@@ -195,23 +195,24 @@ def predict():
     ml_age, ml_message, ml_future_predictions = predict_marriage_ml(dob, gender, status, personality, place)
 
     try:
-        return jsonify({
+        response = {
             'stochastic': {
                 'marriage_age_1': stoch_age_1,
                 'marriage_age_2': stoch_age_2,
-                'life_path_data': life_path_data if life_path_data else [],
-                'happiness_data': [[age, happiness] for age, _, happiness, _ in life_path_data],
-                'events': events,
-                'divorce_ages': divorce_ages,
+                'life_path_data': [list(map(float, item)) for item in life_path_data] if life_path_data else [],  # Convert tuple elements
+                'happiness_data': [[int(age), float(happiness)] for age, _, happiness, _ in life_path_data],  # Ensure int/float
+                'events': {int(k): v for k, v in events.items()},  # Convert keys to int
+                'divorce_ages': divorce_ages,  # Already converted to int
                 'no_marriage_predicted': no_marriage_predicted,
                 'prediction_message': stoch_message
             },
             'ml': {
                 'marriage_age': ml_age,
                 'prediction_message': ml_message,
-                'future_predictions': ml_future_predictions
+                'future_predictions': ml_future_predictions  # Already converted to float
             }
-        })
+        }
+        return jsonify(response)
     except Exception as e:
         app.logger.error(f"Error generating response: {e}")
         return jsonify({'error': str(e)}), 500

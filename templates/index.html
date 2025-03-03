@@ -226,7 +226,7 @@
                 }
                 const data = await response.json();
 
-                console.log('Response data:', data);  // Debugging log
+                console.log('Response data:', data);
 
                 // Display predictions
                 document.getElementById('stochasticPrediction').innerText = data.stochastic.prediction_message;
@@ -251,7 +251,7 @@
                 const stability = data.stochastic.life_path_data.map(item => item[3]);
                 const divorceProb = ages.map((age, i) => {
                     const stability_factor = stability[i] / 100;
-                    return commitment[i] > 2.5 && stability_factor < 0.4 ? 0.2 : 0;  // Adjusted to match threshold
+                    return commitment[i] > 2.5 && stability_factor < 0.4 ? 0.2 : 0;
                 });
 
                 const chartOptions = {
@@ -363,12 +363,12 @@
 
                 // ML Charts
                 const mlFutureAges = Array.from({ length: 10 }, (_, i) => ages[0] + i);
-                const mlFuturePredictions = data.ml.future_predictions || Array(10).fill(0);  // Fallback to zeros
-                const mlStatusTrend = mlFuturePredictions.map(pred => Math.round(pred));  // Round to nearest status
-                const mlMarriageTrend = mlFuturePredictions.map(pred => pred > 0.5 ? 1 : 0);  // Marriage likelihood
-                const mlDivorceTrend = mlFuturePredictions.map(pred => pred > 1.5 ? 1 : 0);   // Divorce likelihood
+                const mlFuturePredictions = data.ml.future_predictions || Array(10).fill(0);
+                const mlStatusTrend = mlFuturePredictions.map(pred => Math.round(pred));
+                const mlMarriageTrend = mlFuturePredictions.map(pred => pred > 0.5 ? 1 : 0);
+                const mlDivorceTrend = mlFuturePredictions.map(pred => pred > 1.5 ? 1 : 0);
 
-                console.log('ML Future Predictions:', mlFuturePredictions);  // Debugging log
+                console.log('ML Future Predictions:', mlFuturePredictions);
 
                 mlStatusChart = new Chart(document.getElementById('mlStatusChart').getContext('2d'), {
                     type: 'line',
