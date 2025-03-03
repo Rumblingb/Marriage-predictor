@@ -7,62 +7,119 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f9;
-            color: #333;
+            font-family: 'Arial', sans-serif;
+            background-color: #1a1a1a;
+            color: #e0e0e0;
             margin: 0;
-            padding: 0;
+            padding: 20px;
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
             flex-direction: column;
+            min-height: 100vh;
         }
         .container {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            width: 80%;
-            max-width: 600px;
+            background: #2b2b2b;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.5);
+            width: 90%;
+            max-width: 900px;
             text-align: center;
         }
         h1 {
             color: #4CAF50;
+            margin-bottom: 20px;
         }
         form {
-            margin-bottom: 20px;
+            margin-bottom: 25px;
         }
         label {
             display: block;
-            margin: 10px 0 5px;
+            margin: 12px 0 6px;
+            color: #b0b0b0;
         }
         input, select {
             width: 100%;
-            padding: 10px;
-            margin-bottom: 10px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
+            padding: 12px;
+            margin-bottom: 12px;
+            border: 1px solid #444;
+            border-radius: 6px;
+            background: #333;
+            color: #e0e0e0;
         }
         button {
             background-color: #4CAF50;
             color: white;
-            padding: 10px 20px;
+            padding: 12px 24px;
             border: none;
-            border-radius: 5px;
+            border-radius: 6px;
             cursor: pointer;
+            transition: background-color 0.3s;
         }
         button:hover {
             background-color: #45a049;
         }
         #result {
+            margin-top: 25px;
+        }
+        #charts {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
             margin-top: 20px;
         }
-        #lifePathChart {
-            margin-top: 20px;
+        canvas {
+            width: 100% !important;
+            height: 250px !important;
+            max-width: 400px;
+            max-height: 250px;
+            background: #333;
+            border-radius: 6px;
         }
         .hidden {
             display: none;
+        }
+        .toggle-button {
+            display: flex;
+            justify-content: center;
+            margin: 12px 0;
+        }
+        .toggle-button button {
+            padding: 10px 20px;
+            margin: 0 6px;
+            cursor: pointer;
+            border: none;
+            background-color: #444;
+            color: #e0e0e0;
+            border-radius: 6px;
+            transition: background-color 0.3s;
+        }
+        .toggle-button button.active {
+            background-color: #4CAF50;
+            color: white;
+        }
+        #predictions {
+            margin-top: 20px;
+        }
+        .prediction-section {
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #3a3a3a;
+            border-radius: 6px;
+        }
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #fff;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s linear infinite;
+            margin-left: 5px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
     </style>
 </head>
@@ -76,32 +133,88 @@
             <input type="date" id="dob" name="dob" required>
             <label for="place">Place:</label>
             <input type="text" id="place" name="place" required>
+            <label for="gender">Gender:</label>
+            <select id="gender" name="gender" required>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+            </select>
+            <label for="relationship">Current Relationship Status:</label>
+            <select id="relationship" name="relationship">
+                <option value="Single">Single</option>
+                <option value="Dating">Dating</option>
+                <option value="Married">Married</option>
+            </select>
+            <label for="personality">Personality Type:</label>
+            <div class="toggle-button">
+                <button type="button" id="introvertBtn" class="active">Introvert</button>
+                <button type="button" id="extrovertBtn">Extrovert</button>
+            </div>
+            <input type="hidden" id="personality" name="personality" value="introvert">
             <button type="submit">Predict</button>
         </form>
         <div id="result" class="hidden">
-            <h2>Prediction Result</h2>
-            <p id="marriageAge"></p>
-            <canvas id="lifePathChart"></canvas>
+            <h2>Prediction Results</h2>
+            <div id="predictions">
+                <div class="prediction-section" id="stochasticPrediction"></div>
+                <div class="prediction-section" id="mlPrediction"></div>
+            </div>
+            <div id="charts">
+                <!-- Stochastic Charts -->
+                <canvas id="commitmentChart"></canvas>
+                <canvas id="happinessChart"></canvas>
+                <canvas id="stabilityChart"></canvas>
+                <canvas id="divorceChart"></canvas>
+                <!-- ML Charts -->
+                <canvas id="mlStatusChart"></canvas>
+                <canvas id="mlMarriageTrendChart"></canvas>
+                <canvas id="mlDivorceTrendChart"></canvas>
+            </div>
         </div>
     </div>
     <script>
-        let lifePathChart;
+        let commitmentChart, happinessChart, stabilityChart, divorceChart;
+        let mlStatusChart, mlMarriageTrendChart, mlDivorceTrendChart;
 
+        // Toggle button logic for personality type
+        const introvertBtn = document.getElementById('introvertBtn');
+        const extrovertBtn = document.getElementById('extrovertBtn');
+        const personalityInput = document.getElementById('personality');
+
+        introvertBtn.addEventListener('click', () => {
+            personalityInput.value = 'introvert';
+            introvertBtn.classList.add('active');
+            extrovertBtn.classList.remove('active');
+        });
+
+        extrovertBtn.addEventListener('click', () => {
+            personalityInput.value = 'extrovert';
+            extrovertBtn.classList.add('active');
+            introvertBtn.classList.remove('active');
+        });
+
+        // Form submission logic
         document.getElementById('predictionForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const formData = {
-                name: document.getElementById('name').value,
-                dob: formatDate(document.getElementById('dob').value), // Format date to DD-MM-YYYY
-                place: document.getElementById('place').value
-            };
-
-            // Validate date
-            if (!formData.dob) {
-                document.getElementById('result').innerHTML = `<p style="color: red;">Error: Please enter a valid date.</p>`;
-                return;
-            }
+            const submitButton = document.querySelector('#predictionForm button[type="submit"]');
+            submitButton.disabled = true;
+            submitButton.innerHTML = 'Predicting... <span class="spinner"></span>';
 
             try {
+                const formData = {
+                    name: document.getElementById('name').value,
+                    dob: formatDate(document.getElementById('dob').value),
+                    place: document.getElementById('place').value,
+                    gender: document.getElementById('gender').value,
+                    relationship: document.getElementById('relationship').value,
+                    personality: personalityInput.value
+                };
+
+                if (!formData.name || !formData.dob || !formData.place || !formData.gender || !formData.relationship || !formData.personality) {
+                    document.getElementById('result').innerHTML = `<p style="color: #ff5555;">Error: Please fill out all fields.</p>`;
+                    return;
+                }
+
                 const response = await fetch('/predict', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -113,62 +226,202 @@
                 }
                 const data = await response.json();
 
-                // Display marriage age(s)
-                if (data.marriage_age_2) {
-                    document.getElementById('marriageAge').innerText = `You're going to be married twice at these ages: ${data.marriage_age_1} and ${data.marriage_age_2}.`;
-                } else {
-                    document.getElementById('marriageAge').innerText = `You may get married around age ${data.marriage_age_1}.`;
-                }
+                console.log('Response data:', data);  // Debugging log
 
-                // Show the result section
+                // Display predictions
+                document.getElementById('stochasticPrediction').innerText = data.stochastic.prediction_message;
+                document.getElementById('mlPrediction').innerText = data.ml.prediction_message;
                 document.getElementById('result').classList.remove('hidden');
 
-                // Destroy existing chart if it exists
-                if (lifePathChart) {
-                    lifePathChart.destroy();
+                // Destroy existing charts
+                [commitmentChart, happinessChart, stabilityChart, divorceChart,
+                 mlStatusChart, mlMarriageTrendChart, mlDivorceTrendChart].forEach(chart => {
+                    if (chart) chart.destroy();
+                });
+
+                // Stochastic Charts
+                if (!data.stochastic.life_path_data || !Array.isArray(data.stochastic.life_path_data)) {
+                    console.error("Error: Missing or invalid 'life_path_data' from backend");
+                    return;
                 }
 
-                // Extract ages and life path values
-                const ages = data.life_path_data.map(item => item[0]);
-                const lifePathValues = data.life_path_data.map(item => item[1]);
+                const ages = data.stochastic.life_path_data.map(item => item[0]);
+                const commitment = data.stochastic.life_path_data.map(item => item[1]);
+                const happiness = data.stochastic.life_path_data.map(item => item[2]);
+                const stability = data.stochastic.life_path_data.map(item => item[3]);
+                const divorceProb = ages.map((age, i) => {
+                    const stability_factor = stability[i] / 100;
+                    return commitment[i] > 2.5 && stability_factor < 0.4 ? 0.2 : 0;  // Adjusted to match threshold
+                });
 
-                // Render the life path graph
-                const ctx = document.getElementById('lifePathChart').getContext('2d');
-                lifePathChart = new Chart(ctx, {
+                const chartOptions = {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { title: { display: true, color: '#e0e0e0' }, ticks: { color: '#b0b0b0' } },
+                        x: { ticks: { color: '#b0b0b0' } }
+                    },
+                    plugins: { legend: { labels: { color: '#e0e0e0' } } }
+                };
+
+                commitmentChart = new Chart(document.getElementById('commitmentChart').getContext('2d'), {
                     type: 'line',
                     data: {
-                        labels: ages, // X-axis labels (ages)
+                        labels: ages,
                         datasets: [{
-                            label: 'Life Path',
-                            data: lifePathValues, // Y-axis data (life path values)
+                            label: 'Commitment Path',
+                            data: commitment,
                             borderColor: '#4CAF50',
                             fill: false
                         }]
                     },
                     options: {
-                        scales: {
-                            x: {
-                                title: {
-                                    display: true,
-                                    text: 'Age'
-                                }
-                            },
-                            y: {
-                                title: {
-                                    display: true,
-                                    text: 'Life Path Value'
-                                }
+                        ...chartOptions,
+                        scales: { y: { title: { text: 'Commitment Level' } } },
+                        plugins: {
+                            annotation: {
+                                annotations: [
+                                    ...(data.stochastic.marriage_age_1 ? [{
+                                        type: 'line',
+                                        xMin: data.stochastic.marriage_age_1,
+                                        xMax: data.stochastic.marriage_age_1,
+                                        borderColor: 'red',
+                                        borderWidth: 2,
+                                        label: { content: '1st Marriage', enabled: true, position: 'top', color: '#ff5555' }
+                                    }] : []),
+                                    ...(data.stochastic.marriage_age_2 ? [{
+                                        type: 'line',
+                                        xMin: data.stochastic.marriage_age_2,
+                                        xMax: data.stochastic.marriage_age_2,
+                                        borderColor: 'purple',
+                                        borderWidth: 2,
+                                        label: { content: '2nd Marriage', enabled: true, position: 'top', color: '#aa00ff' }
+                                    }] : []),
+                                    ...data.stochastic.divorce_ages.map(age => ({
+                                        type: 'line',
+                                        xMin: age,
+                                        xMax: age,
+                                        borderColor: '#FF4500',
+                                        borderWidth: 2,
+                                        label: { content: 'Divorce', enabled: true, position: 'top', color: '#FF4500' }
+                                    })),
+                                    ...Object.entries(data.stochastic.events).map(([age, event]) => ({
+                                        type: 'point',
+                                        xValue: parseInt(age) + ages[0],
+                                        yValue: commitment[age],
+                                        backgroundColor: 'blue',
+                                        radius: 5,
+                                        label: { content: event, enabled: true, position: 'right', color: '#55aaff' }
+                                    }))
+                                ]
                             }
                         }
                     }
                 });
+
+                happinessChart = new Chart(document.getElementById('happinessChart').getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: ages,
+                        datasets: [{
+                            label: 'Happiness Over Time',
+                            data: happiness,
+                            borderColor: '#FFA500',
+                            fill: false
+                        }]
+                    },
+                    options: { ...chartOptions, scales: { y: { title: { text: 'Happiness (%)' } } } }
+                });
+
+                stabilityChart = new Chart(document.getElementById('stabilityChart').getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: ages,
+                        datasets: [{
+                            label: 'Relationship Stability',
+                            data: stability,
+                            borderColor: '#1E90FF',
+                            fill: false
+                        }]
+                    },
+                    options: { ...chartOptions, scales: { y: { title: { text: 'Stability (%)' } } } }
+                });
+
+                divorceChart = new Chart(document.getElementById('divorceChart').getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: ages,
+                        datasets: [{
+                            label: 'Divorce Probability',
+                            data: divorceProb,
+                            borderColor: '#FF4500',
+                            fill: false
+                        }]
+                    },
+                    options: { ...chartOptions, scales: { y: { title: { text: 'P(Divorce)' }, beginAtZero: true, max: 1 } } }
+                });
+
+                // ML Charts
+                const mlFutureAges = Array.from({ length: 10 }, (_, i) => ages[0] + i);
+                const mlFuturePredictions = data.ml.future_predictions || Array(10).fill(0);  // Fallback to zeros
+                const mlStatusTrend = mlFuturePredictions.map(pred => Math.round(pred));  // Round to nearest status
+                const mlMarriageTrend = mlFuturePredictions.map(pred => pred > 0.5 ? 1 : 0);  // Marriage likelihood
+                const mlDivorceTrend = mlFuturePredictions.map(pred => pred > 1.5 ? 1 : 0);   // Divorce likelihood
+
+                console.log('ML Future Predictions:', mlFuturePredictions);  // Debugging log
+
+                mlStatusChart = new Chart(document.getElementById('mlStatusChart').getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: mlFutureAges,
+                        datasets: [{
+                            label: 'Predicted Status',
+                            data: mlStatusTrend,
+                            borderColor: '#FF5555',
+                            fill: false,
+                            stepped: true
+                        }]
+                    },
+                    options: { ...chartOptions, scales: { y: { title: { text: 'Status (0=Single, 1=Married, 2=Divorced)' }, min: 0, max: 2 } } }
+                });
+
+                mlMarriageTrendChart = new Chart(document.getElementById('mlMarriageTrendChart').getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: mlFutureAges,
+                        datasets: [{
+                            label: 'Marriage Likelihood',
+                            data: mlMarriageTrend,
+                            borderColor: '#4CAF50',
+                            fill: false
+                        }]
+                    },
+                    options: { ...chartOptions, scales: { y: { title: { text: 'Married (0=No, 1=Yes)' }, beginAtZero: true, max: 1 } } }
+                });
+
+                mlDivorceTrendChart = new Chart(document.getElementById('mlDivorceTrendChart').getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: mlFutureAges,
+                        datasets: [{
+                            label: 'Divorce Likelihood',
+                            data: mlDivorceTrend,
+                            borderColor: '#AA00FF',
+                            fill: false
+                        }]
+                    },
+                    options: { ...chartOptions, scales: { y: { title: { text: 'Divorced (0=No, 1=Yes)' }, beginAtZero: true, max: 1 } } }
+                });
+
             } catch (error) {
                 console.error('Error:', error);
-                document.getElementById('result').innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+                document.getElementById('result').innerHTML = `<p style="color: #ff5555;">Error: ${error.message}</p>`;
+            } finally {
+                submitButton.disabled = false;
+                submitButton.innerHTML = 'Predict';
             }
         });
 
-        // Helper function to format date from YYYY-MM-DD to DD-MM-YYYY
         function formatDate(dateString) {
             if (!dateString) return null;
             const [year, month, day] = dateString.split('-');
