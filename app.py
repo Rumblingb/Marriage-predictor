@@ -234,7 +234,7 @@ def predict_marriage_ml(dob, gender, status, personality, place, money_factor=0,
 
 @app.route('/')
 def index():
-    return render_template('index.html', names=names_list)
+    return render_template('index.html')
 
 @app.route('/predict', methods=['POST'])
 def predict():
