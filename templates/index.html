@@ -121,6 +121,20 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+        .control-group {
+            margin: 20px 0;
+        }
+        .control-group label {
+            margin-bottom: 10px;
+        }
+        .control-group input[type="range"] {
+            width: 80%;
+            margin-top: 10px;
+        }
+        .control-value {
+            font-size: 1.1em;
+            color: #4CAF50;
+        }
     </style>
 </head>
 <body>
@@ -153,6 +167,23 @@
             <input type="hidden" id="personality" name="personality" value="introvert">
             <button type="submit">Predict</button>
         </form>
+        <div id="controls" class="hidden">
+            <div class="control-group">
+                <label for="money-slider">Money Factor (-10,000 to +100,000 USD):</label>
+                <input type="range" id="money-slider" min="-10000" max="100000" step="10000" value="0">
+                <span id="money-value" class="control-value">$0</span>
+            </div>
+            <div class="control-group">
+                <label for="happiness-slider">Happiness Level (0-100):</label>
+                <input type="range" id="happiness-slider" min="0" max="100" step="10" value="50">
+                <span id="happiness-value" class="control-value">50</span>
+            </div>
+            <div class="control-group">
+                <label for="stability-slider">Stability Boost (0-100):</label>
+                <input type="range" id="stability-slider" min="0" max="100" step="10" value="50">
+                <span id="stability-value" class="control-value">50</span>
+            </div>
+        </div>
         <div id="result" class="hidden">
             <h2>Prediction Results</h2>
             <div id="predictions">
@@ -166,7 +197,7 @@
                 <canvas id="stabilityChart"></canvas>
                 <canvas id="divorceChart"></canvas>
                 <!-- ML Charts -->
-                <canvas id="mlStatusChart"></canvas>
+                <canvas id="mlProbChart"></canvas>
                 <canvas id="mlMarriageTrendChart"></canvas>
                 <canvas id="mlDivorceTrendChart"></canvas>
             </div>
@@ -174,12 +205,18 @@
     </div>
     <script>
         let commitmentChart, happinessChart, stabilityChart, divorceChart;
-        let mlStatusChart, mlMarriageTrendChart, mlDivorceTrendChart;
+        let mlProbChart, mlMarriageTrendChart, mlDivorceTrendChart;
 
-        // Toggle button logic for personality type
         const introvertBtn = document.getElementById('introvertBtn');
         const extrovertBtn = document.getElementById('extrovertBtn');
         const personalityInput = document.getElementById('personality');
+        const moneySlider = document.getElementById('money-slider');
+        const happinessSlider = document.getElementById('happiness-slider');
+        const stabilitySlider = document.getElementById('stability-slider');
+        const moneyValue = document.getElementById('money-value');
+        const happinessValue = document.getElementById('happiness-value');
+        const stabilityValue = document.getElementById('stability-value');
+        let latestFormData = {};
 
         introvertBtn.addEventListener('click', () => {
             personalityInput.value = 'introvert';
@@ -193,53 +230,53 @@
             introvertBtn.classList.remove('active');
         });
 
-        // Form submission logic
-        document.getElementById('predictionForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
+        function updateSliders() {
+            const moneyFactor = parseFloat(moneySlider.value);
+            const happinessLevel = parseFloat(happinessSlider.value);
+            const stabilityBoost = parseFloat(stabilitySlider.value);
+            moneyValue.textContent = `$${moneyFactor.toLocaleString()}`;
+            happinessValue.textContent = happinessLevel;
+            stabilityValue.textContent = stabilityBoost;
+            if (latestFormData.name) {
+                updatePredictions(moneyFactor, happinessLevel, stabilityBoost);
+            }
+        }
+
+        moneySlider.addEventListener('input', updateSliders);
+        happinessSlider.addEventListener('input', updateSliders);
+        stabilitySlider.addEventListener('input', updateSliders);
+
+        async function updatePredictions(moneyFactor, happinessLevel, stabilityBoost) {
             const submitButton = document.querySelector('#predictionForm button[type="submit"]');
             submitButton.disabled = true;
-            submitButton.innerHTML = 'Predicting... <span class="spinner"></span>';
+            submitButton.innerHTML = 'Updating... <span class="spinner"></span>';
 
             try {
-                const formData = {
-                    name: document.getElementById('name').value,
-                    dob: formatDate(document.getElementById('dob').value),
-                    place: document.getElementById('place').value,
-                    gender: document.getElementById('gender').value,
-                    relationship: document.getElementById('relationship').value,
-                    personality: personalityInput.value
-                };
-
-                if (!formData.name || !formData.dob || !formData.place || !formData.gender || !formData.relationship || !formData.personality) {
-                    document.getElementById('result').innerHTML = `<p style="color: #ff5555;">Error: Please fill out all fields.</p>`;
-                    return;
-                }
-
+                latestFormData.money_factor = moneyFactor;
+                latestFormData.happiness_level = happinessLevel;
+                latestFormData.stability_boost = stabilityBoost;
                 const response = await fetch('/predict', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(formData)
+                    body: JSON.stringify(latestFormData)
                 });
                 if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || 'Network response was not ok');
+                    const errorText = await response.text();
+                    console.error('Error response:', errorText);
+                    throw new Error(`Network response was not ok: ${errorText}`);
                 }
                 const data = await response.json();
 
                 console.log('Response data:', data);
 
-                // Display predictions
                 document.getElementById('stochasticPrediction').innerText = data.stochastic.prediction_message;
                 document.getElementById('mlPrediction').innerText = data.ml.prediction_message;
-                document.getElementById('result').classList.remove('hidden');
 
-                // Destroy existing charts
                 [commitmentChart, happinessChart, stabilityChart, divorceChart,
-                 mlStatusChart, mlMarriageTrendChart, mlDivorceTrendChart].forEach(chart => {
+                 mlProbChart, mlMarriageTrendChart, mlDivorceTrendChart].forEach(chart => {
                     if (chart) chart.destroy();
                 });
 
-                // Stochastic Charts
                 if (!data.stochastic.life_path_data || !Array.isArray(data.stochastic.life_path_data)) {
                     console.error("Error: Missing or invalid 'life_path_data' from backend");
                     return;
@@ -249,9 +286,10 @@
                 const commitment = data.stochastic.life_path_data.map(item => item[1]);
                 const happiness = data.stochastic.life_path_data.map(item => item[2]);
                 const stability = data.stochastic.life_path_data.map(item => item[3]);
+                const moneyImpact = (moneyFactor + 10000) / 110000;
                 const divorceProb = ages.map((age, i) => {
                     const stability_factor = stability[i] / 100;
-                    return commitment[i] > 2.5 && stability_factor < 0.4 ? 0.2 : 0;
+                    return commitment[i] > 2.5 && stability_factor < 0.4 ? 0.2 - (moneyImpact - 0.5) * 0.3 : 0;
                 });
 
                 const chartOptions = {
@@ -362,27 +400,22 @@
                 });
 
                 // ML Charts
+                const mlProbs = data.ml.probabilities;
                 const mlFutureAges = Array.from({ length: 10 }, (_, i) => ages[0] + i);
-                const mlFuturePredictions = data.ml.future_predictions || Array(10).fill(0);
-                const mlStatusTrend = mlFuturePredictions.map(pred => Math.round(pred));
-                const mlMarriageTrend = mlFuturePredictions.map(pred => pred > 0.5 ? 1 : 0);
-                const mlDivorceTrend = mlFuturePredictions.map(pred => pred > 1.5 ? 1 : 0);
+                const mlFutureMarriageProbs = data.ml.future_probabilities.map(prob => prob[1]);
+                const mlFutureDivorceProbs = data.ml.future_probabilities.map(prob => prob[2]);
 
-                console.log('ML Future Predictions:', mlFuturePredictions);
-
-                mlStatusChart = new Chart(document.getElementById('mlStatusChart').getContext('2d'), {
-                    type: 'line',
+                mlProbChart = new Chart(document.getElementById('mlProbChart').getContext('2d'), {
+                    type: 'bar',
                     data: {
-                        labels: mlFutureAges,
+                        labels: ['Single', 'Married', 'Divorced'],
                         datasets: [{
-                            label: 'Predicted Status',
-                            data: mlStatusTrend,
-                            borderColor: '#FF5555',
-                            fill: false,
-                            stepped: true
+                            label: 'ML Probabilities',
+                            data: mlProbs,
+                            backgroundColor: ['#FF5555', '#4CAF50', '#AA00FF']
                         }]
                     },
-                    options: { ...chartOptions, scales: { y: { title: { text: 'Status (0=Single, 1=Married, 2=Divorced)' }, min: 0, max: 2 } } }
+                    options: { ...chartOptions, scales: { y: { title: { text: 'Probability' }, beginAtZero: true, max: 1 } } }
                 });
 
                 mlMarriageTrendChart = new Chart(document.getElementById('mlMarriageTrendChart').getContext('2d'), {
@@ -390,13 +423,13 @@
                     data: {
                         labels: mlFutureAges,
                         datasets: [{
-                            label: 'Marriage Likelihood',
-                            data: mlMarriageTrend,
+                            label: 'P(Married) Trend',
+                            data: mlFutureMarriageProbs,
                             borderColor: '#4CAF50',
                             fill: false
                         }]
                     },
-                    options: { ...chartOptions, scales: { y: { title: { text: 'Married (0=No, 1=Yes)' }, beginAtZero: true, max: 1 } } }
+                    options: { ...chartOptions, scales: { y: { title: { text: 'P(Married)' }, beginAtZero: true, max: 1 } } }
                 });
 
                 mlDivorceTrendChart = new Chart(document.getElementById('mlDivorceTrendChart').getContext('2d'), {
@@ -404,15 +437,46 @@
                     data: {
                         labels: mlFutureAges,
                         datasets: [{
-                            label: 'Divorce Likelihood',
-                            data: mlDivorceTrend,
+                            label: 'P(Divorced) Trend',
+                            data: mlFutureDivorceProbs,
                             borderColor: '#AA00FF',
                             fill: false
                         }]
                     },
-                    options: { ...chartOptions, scales: { y: { title: { text: 'Divorced (0=No, 1=Yes)' }, beginAtZero: true, max: 1 } } }
+                    options: { ...chartOptions, scales: { y: { title: { text: 'P(Divorced)' }, beginAtZero: true, max: 1 } } }
                 });
 
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('result').innerHTML = `<p style="color: #ff5555;">Error: ${error.message}</p>`;
+            } finally {
+                submitButton.disabled = false;
+                submitButton.innerHTML = 'Predict';
+            }
+        }
+
+        document.getElementById('predictionForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const submitButton = document.querySelector('#predictionForm button[type="submit"]');
+            submitButton.disabled = true;
+            submitButton.innerHTML = 'Predicting... <span class="spinner"></span>';
+
+            try {
+                latestFormData = {
+                    name: document.getElementById('name').value,
+                    dob: formatDate(document.getElementById('dob').value),
+                    place: document.getElementById('place').value,
+                    gender: document.getElementById('gender').value,
+                    relationship: document.getElementById('relationship').value,
+                    personality: personalityInput.value,
+                    money_factor: parseFloat(moneySlider.value),
+                    happiness_level: parseFloat(happinessSlider.value),
+                    stability_boost: parseFloat(stabilitySlider.value)
+                };
+
+                await updatePredictions(latestFormData.money_factor, latestFormData.happiness_level, latestFormData.stability_boost);
+                document.getElementById('controls').classList.remove('hidden');
+                document.getElementById('result').classList.remove('hidden');
             } catch (error) {
                 console.error('Error:', error);
                 document.getElementById('result').innerHTML = `<p style="color: #ff5555;">Error: ${error.message}</p>`;
