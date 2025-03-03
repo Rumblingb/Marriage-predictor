@@ -5,7 +5,6 @@ from datetime import datetime
 import logging
 from sklearn.ensemble import RandomForestClassifier
 import pandas as pd
-import pickle
 import os
 
 app = Flask(__name__)
@@ -69,11 +68,6 @@ def preprocess_world_marriage_data(file_path):
         y = df['Marital_Status_Encoded']
         app.logger.debug(f"Training features: {X.columns.tolist()}, shape: {X.shape}")
         return X, y
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Dataset file not found at {file_path}.")
-    except Exception as e:
-        app.logger.error(f"Error preprocessing data: {e}")
-        raise
 
 # Train ML model
 def train_ml_model(file_path):
@@ -81,21 +75,15 @@ def train_ml_model(file_path):
         X, y = preprocess_world_marriage_data(file_path)
         model = RandomForestClassifier(n_estimators=50, max_depth=10, min_samples_split=5, class_weight='balanced', random_state=42)
         model.fit(X, y)
-        with open('marriage_model.pkl', 'wb') as f:
-            pickle.dump(model, f)
-        app.logger.info("Model trained and saved successfully with 8 features")
+        app.logger.info("Model trained successfully with 8 features")
         return model
     except Exception as e:
         app.logger.error(f"Error training model: {e}")
         raise
 
-# Load or train ML model
-DATASET_PATH = 'World Marriage Dataset.csv'  # Relative path for deployment
-if not os.path.exists('marriage_model.pkl'):
-    ml_model = train_ml_model(DATASET_PATH)
-else:
-    with open('marriage_model.pkl', 'rb') as f:
-        ml_model = pickle.load(f)
+# Load or train ML model on startup
+DATASET_PATH = 'World Marriage Dataset.csv'
+ml_model = train_ml_model(DATASET_PATH)  # Train on startup, no pickle
 
 # Enhanced Brownian motion with updated factors
 def brownian_motion(steps=50, drift=0.3, volatility=0.4, initial_position=0, money_factor=0, height=50, healthiness=25):
@@ -287,5 +275,5 @@ def predict():
 
 if __name__ == '__main__':
     preprocess_world_marriage_data(DATASET_PATH)
-    port = int(os.environ.get('PORT', 5000))  # Use PORT env var for Render
+    port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
