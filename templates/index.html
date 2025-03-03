@@ -135,12 +135,6 @@
             font-size: 1.1em;
             color: #4CAF50;
         }
-        #names-list {
-            margin-top: 20px;
-            text-align: left;
-            max-height: 200px;
-            overflow-y: auto;
-        }
     </style>
 </head>
 <body>
@@ -205,14 +199,6 @@
                 <canvas id="mlMarriageTrendChart"></canvas>
                 <canvas id="mlDivorceTrendChart"></canvas>
             </div>
-        </div>
-        <div id="names-list">
-            <h3>Submitted Names:</h3>
-            <ul>
-                {% for name in names %}
-                    <li>{{ name }}</li>
-                {% endfor %}
-            </ul>
         </div>
     </div>
     <script>
