@@ -169,19 +169,19 @@
         </form>
         <div id="controls" class="hidden">
             <div class="control-group">
-                <label for="money-slider">Money Factor (-10,000 to +100,000 USD):</label>
-                <input type="range" id="money-slider" min="-10000" max="100000" step="10000" value="0">
-                <span id="money-value" class="control-value">$0</span>
+                <label for="money-slider">Income ($/year, 0 to 200,000):</label>
+                <input type="range" id="money-slider" min="0" max="200000" step="10000" value="100000">
+                <span id="money-value" class="control-value">$100,000</span>
             </div>
             <div class="control-group">
-                <label for="happiness-slider">Happiness Level (0-100):</label>
-                <input type="range" id="happiness-slider" min="0" max="100" step="10" value="50">
-                <span id="happiness-value" class="control-value">50</span>
+                <label for="height-slider">Height (3ft to 8ft):</label>
+                <input type="range" id="height-slider" min="36" max="96" step="1" value="66">
+                <span id="height-value" class="control-value">5ft 6in</span>
             </div>
             <div class="control-group">
-                <label for="stability-slider">Stability Boost (0-100):</label>
-                <input type="range" id="stability-slider" min="0" max="100" step="10" value="50">
-                <span id="stability-value" class="control-value">50</span>
+                <label for="healthiness-slider">Healthiness (BMI 15 to 40):</label>
+                <input type="range" id="healthiness-slider" min="15" max="40" step="1" value="25">
+                <span id="healthiness-value" class="control-value">25</span>
             </div>
         </div>
         <div id="result" class="hidden">
@@ -191,12 +191,10 @@
                 <div class="prediction-section" id="mlPrediction"></div>
             </div>
             <div id="charts">
-                <!-- Stochastic Charts -->
                 <canvas id="commitmentChart"></canvas>
                 <canvas id="happinessChart"></canvas>
                 <canvas id="stabilityChart"></canvas>
                 <canvas id="divorceChart"></canvas>
-                <!-- ML Charts -->
                 <canvas id="mlProbChart"></canvas>
                 <canvas id="mlMarriageTrendChart"></canvas>
                 <canvas id="mlDivorceTrendChart"></canvas>
@@ -211,11 +209,11 @@
         const extrovertBtn = document.getElementById('extrovertBtn');
         const personalityInput = document.getElementById('personality');
         const moneySlider = document.getElementById('money-slider');
-        const happinessSlider = document.getElementById('happiness-slider');
-        const stabilitySlider = document.getElementById('stability-slider');
+        const heightSlider = document.getElementById('height-slider');
+        const healthinessSlider = document.getElementById('healthiness-slider');
         const moneyValue = document.getElementById('money-value');
-        const happinessValue = document.getElementById('happiness-value');
-        const stabilityValue = document.getElementById('stability-value');
+        const heightValue = document.getElementById('height-value');
+        const healthinessValue = document.getElementById('healthiness-value');
         let latestFormData = {};
 
         introvertBtn.addEventListener('click', () => {
@@ -232,29 +230,31 @@
 
         function updateSliders() {
             const moneyFactor = parseFloat(moneySlider.value);
-            const happinessLevel = parseFloat(happinessSlider.value);
-            const stabilityBoost = parseFloat(stabilitySlider.value);
+            const height = parseFloat(heightSlider.value);
+            const healthiness = parseFloat(healthinessSlider.value);
             moneyValue.textContent = `$${moneyFactor.toLocaleString()}`;
-            happinessValue.textContent = happinessLevel;
-            stabilityValue.textContent = stabilityBoost;
+            const ft = Math.floor(height / 12);
+            const inches = height % 12;
+            heightValue.textContent = `${ft}ft ${inches}in`;
+            healthinessValue.textContent = healthiness.toFixed(1);
             if (latestFormData.name) {
-                updatePredictions(moneyFactor, happinessLevel, stabilityBoost);
+                updatePredictions(moneyFactor, height, healthiness);
             }
         }
 
         moneySlider.addEventListener('input', updateSliders);
-        happinessSlider.addEventListener('input', updateSliders);
-        stabilitySlider.addEventListener('input', updateSliders);
+        heightSlider.addEventListener('input', updateSliders);
+        healthinessSlider.addEventListener('input', updateSliders);
 
-        async function updatePredictions(moneyFactor, happinessLevel, stabilityBoost) {
+        async function updatePredictions(moneyFactor, height, healthiness) {
             const submitButton = document.querySelector('#predictionForm button[type="submit"]');
             submitButton.disabled = true;
             submitButton.innerHTML = 'Updating... <span class="spinner"></span>';
 
             try {
                 latestFormData.money_factor = moneyFactor;
-                latestFormData.happiness_level = happinessLevel;
-                latestFormData.stability_boost = stabilityBoost;
+                latestFormData.height = height;
+                latestFormData.healthiness = healthiness;
                 const response = await fetch('/predict', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -286,10 +286,10 @@
                 const commitment = data.stochastic.life_path_data.map(item => item[1]);
                 const happiness = data.stochastic.life_path_data.map(item => item[2]);
                 const stability = data.stochastic.life_path_data.map(item => item[3]);
-                const moneyImpact = (moneyFactor + 10000) / 110000;
+                const moneyImpact = moneyFactor / 200000;
                 const divorceProb = ages.map((age, i) => {
                     const stability_factor = stability[i] / 100;
-                    return commitment[i] > 2.5 && stability_factor < 0.4 ? 0.2 - (moneyImpact - 0.5) * 0.3 : 0;
+                    return commitment[i] > 2.5 && stability_factor < 0.4 ? 0.3 - (moneyImpact - 0.5) * 0.4 : 0;
                 });
 
                 const chartOptions = {
@@ -399,7 +399,6 @@
                     options: { ...chartOptions, scales: { y: { title: { text: 'P(Divorce)' }, beginAtZero: true, max: 1 } } }
                 });
 
-                // ML Charts
                 const mlProbs = data.ml.probabilities;
                 const mlFutureAges = Array.from({ length: 10 }, (_, i) => ages[0] + i);
                 const mlFutureMarriageProbs = data.ml.future_probabilities.map(prob => prob[1]);
@@ -408,11 +407,11 @@
                 mlProbChart = new Chart(document.getElementById('mlProbChart').getContext('2d'), {
                     type: 'bar',
                     data: {
-                        labels: ['Single', 'Married', 'Divorced'],
+                        labels: ['Single', 'Married', 'Divorced', 'Widowed'],
                         datasets: [{
                             label: 'ML Probabilities',
                             data: mlProbs,
-                            backgroundColor: ['#FF5555', '#4CAF50', '#AA00FF']
+                            backgroundColor: ['#FF5555', '#4CAF50', '#AA00FF', '#FFA500']
                         }]
                     },
                     options: { ...chartOptions, scales: { y: { title: { text: 'Probability' }, beginAtZero: true, max: 1 } } }
@@ -470,11 +469,11 @@
                     relationship: document.getElementById('relationship').value,
                     personality: personalityInput.value,
                     money_factor: parseFloat(moneySlider.value),
-                    happiness_level: parseFloat(happinessSlider.value),
-                    stability_boost: parseFloat(stabilitySlider.value)
+                    height: parseFloat(heightSlider.value),
+                    healthiness: parseFloat(healthinessSlider.value)
                 };
 
-                await updatePredictions(latestFormData.money_factor, latestFormData.happiness_level, latestFormData.stability_boost);
+                await updatePredictions(latestFormData.money_factor, latestFormData.height, latestFormData.healthiness);
                 document.getElementById('controls').classList.remove('hidden');
                 document.getElementById('result').classList.remove('hidden');
             } catch (error) {

@@ -18,26 +18,60 @@ country_to_code = {}
 def preprocess_world_marriage_data(file_path):
     global country_to_code
     try:
-        df = pd.read_csv(file_path)
-        df = df.dropna(subset=['Country', 'Age Group', 'Sex', 'Marital Status'])
-        df['Age'] = df['Age Group'].apply(
-            lambda x: (int(x.split('-')[0]) + int(x.split('-')[1])) / 2 if '-' in x else float(x))
-        df['Sex_Encoded'] = df['Sex'].map({'Men': 0, 'Women': 1})
-        df['Country_Encoded'] = df['Country'].astype('category').cat.codes
-        df['Year'] = (df['Data Collection (Start Year)'] + df['Data Collection (End Year)']) / 2
-        df['Marital_Status_Encoded'] = df['Marital Status'].map({'Single': 0, 'Married': 1, 'Divorced': 2})
-        # Add placeholder features
+        df = pd.read_csv(file_path).sample(n=10000, random_state=42)  # Reduce dataset size
+        app.logger.debug(f"CSV column names: {df.columns.tolist()}")
+
+        # Use exact column names from your CSV
+        country_col = 'Country'
+        age_group_col = 'AgeGroup'
+        sex_col = 'Sex'
+        marital_status_col = 'MaritalStatus'
+        year_start_col = 'Data Collection (Start Year)'
+        year_end_col = 'Data Collection (End Year)'
+
+        # Check for missing columns
+        required_cols = [country_col, age_group_col, sex_col, marital_status_col]
+        missing_cols = [col for col in required_cols if col not in df.columns]
+        if missing_cols:
+            raise KeyError(f"Missing columns in dataset: {missing_cols}")
+
+        df = df.dropna(subset=required_cols)
+
+        # Parse AgeGroup
+        def parse_age(age_str):
+            age_str = age_str.strip('[]')
+            if '-' in age_str:
+                start, end = age_str.split('-')
+                return (int(start) + int(end)) / 2
+            elif '+' in age_str:
+                return int(age_str.strip('+'))
+            else:
+                return float(age_str)
+
+        df['Age'] = df[age_group_col].apply(parse_age)
+        df['Sex_Encoded'] = df[sex_col].map({'Man': 0, 'Woman': 1})
+        df['Country_Encoded'] = df[country_col].astype('category').cat.codes
+        df['Year'] = (df[year_start_col] + df[year_end_col]) / 2
+        df['Marital_Status_Encoded'] = df[marital_status_col].map({
+            'Single': 0, 'Never married': 0, 'Not in union': 0,
+            'Married': 1, 'Living together': 1,
+            'Divorced': 2, 'Separated': 2, 'Divorced or Separated': 2,
+            'Widowed': 3
+        }).fillna(0)
+
+        # Add features with realistic ranges
         df['Personality_Encoded'] = np.random.choice([0, 1], size=len(df))  # 0=introvert, 1=extrovert
-        df['Money_Factor'] = np.random.uniform(-10000, 100000, size=len(df))  # -10,000 to 100,000
-        df['Happiness_Level'] = np.random.uniform(0, 100, size=len(df))  # 0-100
-        df['Stability_Boost'] = np.random.uniform(0, 100, size=len(df))  # 0-100
-        country_to_code = dict(zip(df['Country'], df['Country_Encoded']))
-        X = df[['Age', 'Sex_Encoded', 'Country_Encoded', 'Year', 'Personality_Encoded', 'Money_Factor', 'Happiness_Level', 'Stability_Boost']]
+        df['Money_Factor'] = np.random.uniform(0, 200000, size=len(df))  # 0 to 200,000 USD per year
+        df['Height'] = np.random.uniform(36, 96, size=len(df))  # 3 to 8 ft in inches
+        df['Healthiness'] = np.random.uniform(15, 40, size=len(df))  # BMI 15 to 40
+
+        country_to_code = dict(zip(df[country_col], df['Country_Encoded']))
+        X = df[['Age', 'Sex_Encoded', 'Country_Encoded', 'Year', 'Personality_Encoded', 'Money_Factor', 'Height', 'Healthiness']]
         y = df['Marital_Status_Encoded']
         app.logger.debug(f"Training features: {X.columns.tolist()}, shape: {X.shape}")
         return X, y
     except FileNotFoundError:
-        raise FileNotFoundError(f"Dataset file not found at {file_path}. Please provide the correct path.")
+        raise FileNotFoundError(f"Dataset file not found at {file_path}.")
     except Exception as e:
         app.logger.error(f"Error preprocessing data: {e}")
         raise
@@ -46,7 +80,13 @@ def preprocess_world_marriage_data(file_path):
 def train_ml_model(file_path):
     try:
         X, y = preprocess_world_marriage_data(file_path)
-        model = RandomForestClassifier(n_estimators=100, random_state=42)
+        model = RandomForestClassifier(
+            n_estimators=50,
+            max_depth=10,
+            min_samples_split=5,
+            class_weight='balanced',  # Balance class weights
+            random_state=42
+        )
         model.fit(X, y)
         with open('marriage_model.pkl', 'wb') as f:
             pickle.dump(model, f)
@@ -56,12 +96,12 @@ def train_ml_model(file_path):
         app.logger.error(f"Error training model: {e}")
         raise
 
-# Load or train ML model (force retraining for this fix)
+# Load or train ML model (force retraining)
 DATASET_PATH = 'C:/Users/visha/PycharmProjects/FlaskProject1/World Marriage Dataset.csv'
-ml_model = train_ml_model(DATASET_PATH)  # Force retrain by removing file check
+ml_model = train_ml_model(DATASET_PATH)
 
-# Enhanced Brownian motion with multiple factors
-def brownian_motion(steps=50, drift=0.3, volatility=0.4, initial_position=0, money_factor=0, happiness_level=50, stability_boost=50):
+# Enhanced Brownian motion with updated factors
+def brownian_motion(steps=50, drift=0.3, volatility=0.4, initial_position=0, money_factor=0, height=50, healthiness=25):
     dt = 1.0
     position = max(0, initial_position)
     path = [position]
@@ -71,32 +111,32 @@ def brownian_motion(steps=50, drift=0.3, volatility=0.4, initial_position=0, mon
     divorce_events = []
 
     dW = np.random.normal(0, np.sqrt(dt), steps)
-    money_impact = (money_factor + 10000) / 110000  # Normalize -10,000 to 100,000 to 0-1
-    happiness_impact = happiness_level / 100  # Normalize 0-100 to 0-1
-    stability_impact = stability_boost / 100  # Normalize 0-100 to 0-1
+    money_impact = money_factor / 200000  # Normalize 0 to 200,000
+    height_impact = (height - 36) / 60  # Normalize 36 to 96 inches
+    healthiness_impact = (healthiness - 15) / 25  # Normalize 15 to 40 BMI
 
     for i in range(steps):
-        stability_factor = (relationship_stability[-1] / 100.0) + (money_impact * 0.1) + (stability_impact * 0.1)
+        stability_factor = (relationship_stability[-1] / 100.0) + (money_impact * 0.2) + (healthiness_impact * 0.2)
         position += drift * stability_factor * dt + volatility * dW[i] * (1 + stability_factor)
         path.append(position)
 
-        happiness.append(max(30, min(100, happiness[-1] + int(5 * dW[i] * stability_factor + happiness_impact * 5))))
-        stability_change = int(10 * dW[i] - (1 - stability_factor) * 3 + money_impact * 5 + stability_impact * 5)
+        happiness.append(max(30, min(100, happiness[-1] + int(5 * dW[i] * stability_factor + height_impact * 5))))
+        stability_change = int(10 * dW[i] - (1 - stability_factor) * 3 + money_impact * 5 + healthiness_impact * 5)
         relationship_stability.append(max(20, min(90, relationship_stability[-1] + stability_change)))
 
         if i in [steps // 4, steps // 2, 3 * steps // 4]:
             events[i] = random.choice(["Career breakthrough!", "Moved to a new city!", "Found a new hobby!", "Met someone special!"])
 
-        divorce_prob = 0.2 - (money_impact * 0.15) - (happiness_impact * 0.05) - (stability_impact * 0.05)
+        divorce_prob = 0.3 - (money_impact * 0.2) - (height_impact * 0.05) - (healthiness_impact * 0.1)
         if position > 5.0 and relationship_stability[-1] < 40 and random.random() < max(0.05, divorce_prob):
             divorce_events.append(i)
-            position = 1.5 + (money_impact * 0.5) + (happiness_impact * 0.3)
+            position = 1.5 + (money_impact * 0.5) + (height_impact * 0.3)
             path[-1] = position
 
     return path, happiness, relationship_stability, events, divorce_events
 
-# Stochastic marriage prediction with multiple factors
-def predict_marriage_stochastic(name, dob, place, gender, status, personality, money_factor=0, happiness_level=50, stability_boost=50):
+# Stochastic marriage prediction with updated factors
+def predict_marriage_stochastic(name, dob, place, gender, status, personality, money_factor=0, height=50, healthiness=25):
     try:
         birth_date = datetime.strptime(dob, "%d-%m-%Y")
         birth_year = birth_date.year
@@ -107,12 +147,14 @@ def predict_marriage_stochastic(name, dob, place, gender, status, personality, m
     age_now = datetime.now().year - birth_year
     life_expectancy = 80
     steps = life_expectancy - age_now
-    drift = 0.3 if personality == "introvert" else 0.35
-    volatility = 0.4 if personality == "introvert" else 0.45
+    drift = 0.35 if personality == "extrovert" else 0.3
+    volatility = 0.45 if personality == "extrovert" else 0.4
     initial_position = 2.5 if status.lower() in ["in a relationship", "dating"] else 0 if status.lower() == "single" else 4.5
-    initial_position += -0.5 if personality == "introvert" else 0.5
+    initial_position += 0.5 if personality == "extrovert" else -0.5
 
-    path, happiness, relationship_stability, events, divorce_events = brownian_motion(steps, drift, volatility, initial_position, money_factor, happiness_level, stability_boost)
+    path, happiness, relationship_stability, events, divorce_events = brownian_motion(
+        steps, drift, volatility, initial_position, money_factor, height, healthiness
+    )
 
     marriage_threshold = 2.5
     marriage_age_1 = None
@@ -144,8 +186,8 @@ def predict_marriage_stochastic(name, dob, place, gender, status, personality, m
 
     return marriage_age_1, marriage_age_2, list(zip(ages, path, happiness, relationship_stability)), events, no_marriage_predicted, divorce_ages, message
 
-# ML prediction with multiple factors
-def predict_marriage_ml(dob, gender, status, personality, place, money_factor=0, happiness_level=50, stability_boost=50):
+# ML prediction with updated factors
+def predict_marriage_ml(dob, gender, status, personality, place, money_factor=0, height=50, healthiness=25):
     try:
         birth_date = datetime.strptime(dob, "%d-%m-%Y")
         birth_year = birth_date.year
@@ -159,19 +201,21 @@ def predict_marriage_ml(dob, gender, status, personality, place, money_factor=0,
     personality_map = {"introvert": 0, "extrovert": 1}
     country_code = country_to_code.get(place, 0)
 
-    features = [age_now, gender_map.get(gender, 0), country_code, 2019, personality_map[personality], money_factor, happiness_level, stability_boost]
+    features = [age_now, gender_map.get(gender, 0), country_code, 2019, personality_map[personality], money_factor, height, healthiness]
     app.logger.debug(f"Prediction features: {features}")
     probs = ml_model.predict_proba([features])[0]
-    prediction = ml_model.predict([features])[0]
+    app.logger.debug(f"Prediction probabilities: Single={probs[0]:.2f}, Married={probs[1]:.2f}, Divorced={probs[2]:.2f}, Widowed={probs[3]:.2f}")
+    prediction = np.argmax(probs)  # Use highest probability class
     future_probs = []
     for future_age in range(age_now, age_now + 10):
-        future_features = [future_age, gender_map.get(gender, 0), country_code, 2019, personality_map[personality], money_factor, happiness_level, stability_boost]
+        future_features = [future_age, gender_map.get(gender, 0), country_code, 2019, personality_map[personality], money_factor, height, healthiness]
         future_probs.append(ml_model.predict_proba([future_features])[0].tolist())
 
-    if prediction == 1:
+    threshold = 0.25  # Lowered threshold to increase marriage/divorce likelihood
+    if probs[1] > threshold:  # Married
         marriage_age = age_now + random.randint(2, 10)
         message = f"ML Model: Marriage predicted at age {marriage_age} (Probability: {probs[1]:.2f})."
-    elif prediction == 2:
+    elif probs[2] > threshold:  # Divorced
         marriage_age = age_now - random.randint(2, 10) if age_now > 20 else None
         message = f"ML Model: Marriage and divorce predicted (Probability of divorce: {probs[2]:.2f})."
     else:
@@ -196,8 +240,8 @@ def predict():
     status = data.get('relationship')
     personality = data.get('personality')
     money_factor = float(data.get('money_factor', 0))
-    happiness_level = float(data.get('happiness_level', 50))
-    stability_boost = float(data.get('stability_boost', 50))
+    height = float(data.get('height', 50))
+    healthiness = float(data.get('healthiness', 25))
 
     if not all([name, dob, place, gender, status, personality]):
         app.logger.error("Missing required fields")
@@ -209,9 +253,11 @@ def predict():
 
     try:
         stoch_age_1, stoch_age_2, life_path_data, events, no_marriage_predicted, divorce_ages, stoch_message = predict_marriage_stochastic(
-            name, dob, place, gender, status, personality, money_factor, happiness_level, stability_boost
+            name, dob, place, gender, status, personality, money_factor, height, healthiness
         )
-        ml_age, ml_message, ml_probs, ml_future_probs = predict_marriage_ml(dob, gender, status, personality, place, money_factor, happiness_level, stability_boost)
+        ml_age, ml_message, ml_probs, ml_future_probs = predict_marriage_ml(
+            dob, gender, status, personality, place, money_factor, height, healthiness
+        )
 
         response = {
             'stochastic': {
